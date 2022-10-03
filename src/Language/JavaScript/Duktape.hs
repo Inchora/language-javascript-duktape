@@ -69,6 +69,8 @@ module Language.JavaScript.Duktape
   , pushValue
   , pushJson
   , ErrType (..)
+  , pushErrorObject
+  , scriptThrow
   , FuncRet (..)
   , pushFunction
   , pushCurrentFunction
@@ -460,13 +462,13 @@ fromErrType ErrSyntaxError        = c_DUK_ERR_SYNTAX_ERROR
 fromErrType ErrTypeError          = c_DUK_ERR_TYPE_ERROR
 fromErrType ErrUriError           = c_DUK_ERR_URI_ERROR
 
--- pushErrorObject :: ScriptContext -> ErrType -> String -> IO StackIndex
--- pushErrorObject sctx etype message = withDukContext sctx $ \ctx ->
---   withCString message $ \cmessage ->
---     fromIntegral <$> duk_push_error_object ctx (fromErrType etype) cmessage
+pushErrorObject :: ScriptContext -> ErrType -> String -> IO StackIndex
+pushErrorObject sctx etype message = withDukContext sctx $ \ctx ->
+  withCString message $ \cmessage ->
+    fromIntegral <$> duk_push_error_object ctx (fromErrType etype) cmessage
 
--- scriptThrow :: ScriptContext -> IO ()
--- scriptThrow sctx = withDukContext sctx duk_throw
+scriptThrow :: ScriptContext -> IO ()
+scriptThrow sctx = withDukContext sctx duk_throw
 
 -- | Haskell function return value.
 data FuncRet
