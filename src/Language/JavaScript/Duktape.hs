@@ -176,7 +176,8 @@ newContext = do
      else return Nothing
 
 withDukContext :: ScriptContext -> (Ptr DukContext -> IO a) -> IO a
-withDukContext (ScriptContext mfpctx) action =
+withDukContext (ScriptContext mfpctx) action = do
+  putStrLn "withDukContext"
   withForeignPtr mfpctx action
 
 ----------------------------------------------------------------------------------------------------
@@ -247,8 +248,13 @@ checkStackTypes sctx idx typs = withDukContext sctx $ \ctx -> do
     mask = foldl (\m t -> m .|. typeToDukMask t) 0 typs
 
 getType :: ScriptContext -> StackIndex -> IO Type
-getType sctx idx = withDukContext sctx $ \ctx ->
-  (fromMaybe NoneT . dukToType) <$> duk_get_type ctx (fromIntegral idx)
+getType sctx idx = do
+  putStrLn "getType"
+  withDukContext sctx $ \ctx -> do
+    putStrLn "duk_get_type"
+    typ <- duk_get_type ctx (fromIntegral idx)
+    putStrLn "return"
+    return $ fromMaybe NoneT (dukToType typ)
 
 instanceOf :: ScriptContext -> StackIndex -> StackIndex -> IO Bool
 instanceOf sctx a b = withDukContext sctx $ \ctx ->
@@ -562,7 +568,9 @@ getString sctx idx = withDukContext sctx $ \ctx -> do
   peekCString cstr
 
 getText :: ScriptContext -> StackIndex -> IO Text
-getText sctx idx = pack <$> getString sctx idx
+getText sctx idx = do
+  putStrLn "getText"
+  pack <$> getString sctx idx
 
 toString :: ScriptContext -> StackIndex -> IO String
 toString sctx idx = withDukContext sctx $ \ctx -> do
@@ -578,6 +586,7 @@ safeToString sctx idx = withDukContext sctx $ \ctx ->
 
 getValue :: ScriptContext -> StackIndex -> IO (Maybe Value)
 getValue sctx idx' = do
+  putStrLn "getValue"
   idx   <- normalizeIndex sctx idx'
   stype <- getType sctx idx
   case stype of
@@ -587,9 +596,11 @@ getValue sctx idx' = do
     NumberT    ->
       Just . Number . fromRational . toRational <$> getDouble sctx idx
     ObjectT    -> do
+      putStrLn "getValue - object"
       arr <- isArray sctx idx
       if arr
-         then Just . Array . V.fromList . catMaybes <$>
+         then do
+           Just . Array . V.fromList . catMaybes <$>
                 (enumerate sctx idx (EnumArrayIndices True) True $ const $
                    getValue sctx (negate 1))
          else do
@@ -606,9 +617,11 @@ getValue sctx idx' = do
                 objectFallback idx
     _          -> return Nothing
   where
-    objectFallback idx =
+    objectFallback idx = do
+      putStrLn "objectFallback"
       Just . jsonObjectFromList . catMaybes <$>
         (enumerate sctx idx (EnumProperties True False False) True $ const $ do
+            putStrLn "enumerating field"
             key  <- getText sctx (negate 2)
             fmap (key, ) <$> getValue sctx (negate 1))
 
@@ -642,6 +655,7 @@ aesonObjectToList =
 
 getJson :: FromJSON a => ScriptContext -> StackIndex -> IO (Either String a)
 getJson sctx idx = do
+  putStrLn "getJson"
   mval <- getValue sctx idx
   case mval of
     Nothing -> do
@@ -898,6 +912,8 @@ eval_ sctx src = withDukContext sctx $ \ctx -> withCString src $ \csrc ->
 
 evalEither :: FromJSON a => ScriptContext -> String -> IO (Either (Int, String) a)
 evalEither scxt src = do
+  putStrLn "# evalEither"
+  putStrLn "eval"
   merr <- eval scxt src
   case merr of
     Just err -> return (Left err)
