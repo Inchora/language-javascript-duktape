@@ -176,7 +176,11 @@ newContext = do
      else return Nothing
 
 withDukContext :: ScriptContext -> (Ptr DukContext -> IO a) -> IO a
-withDukContext (ScriptContext mfpctx) action = do
+withDukContext (ScriptContext mfpctx) action =
+  withForeignPtr mfpctx action
+
+withDukContext' :: ScriptContext -> (Ptr DukContext -> IO a) -> IO a
+withDukContext' (ScriptContext mfpctx) action = do
   putStrLn "withDukContext"
   withForeignPtr mfpctx action
 
@@ -250,11 +254,13 @@ checkStackTypes sctx idx typs = withDukContext sctx $ \ctx -> do
 getType :: ScriptContext -> StackIndex -> IO Type
 getType sctx idx = do
   putStrLn "getType"
-  withDukContext sctx $ \ctx -> do
+  t <- withDukContext' sctx $ \ctx -> do
     putStrLn "duk_get_type"
     typ <- duk_get_type ctx (fromIntegral idx)
     putStrLn "return"
     return $ fromMaybe NoneT (dukToType typ)
+  putStrLn "getType complete"
+  return t
 
 instanceOf :: ScriptContext -> StackIndex -> StackIndex -> IO Bool
 instanceOf sctx a b = withDukContext sctx $ \ctx ->
@@ -589,6 +595,7 @@ getValue sctx idx' = do
   putStrLn "getValue"
   idx   <- normalizeIndex sctx idx'
   stype <- getType sctx idx
+  print stype
   case stype of
     NullT      -> return (Just Null)
     BooleanT   -> Just . Bool    <$> getBoolean sctx idx
@@ -898,13 +905,23 @@ compile sctx mfilename src flags = withDukContext sctx $ \cxt ->
         Nothing -> duk_pcompile_string cxt flag str
 
 eval :: ScriptContext -> String -> IO (Maybe (Int, String))
-eval sctx src = withDukContext sctx $ \ctx -> withCString src $ \csrc -> do
-  rc <- duk_peval_string ctx csrc
-  if rc /= 0
-    then do
-      str <- duk_safe_to_string ctx (negate 1)
-      Just . (fromIntegral rc, ) <$> peekCString str
-    else return Nothing
+eval sctx src = do
+  putStrLn "eval"
+  withDukContext sctx $ \ctx -> do
+    putStrLn "withCString"
+    putStrLn src
+    withCString src $ \csrc -> do
+      putStrLn "duk_peval_string"
+      rc <- duk_peval_string ctx csrc
+      putStrLn $ "duk_peval_string: " <> show rc
+      if rc /= 0
+        then do
+          putStrLn "duk_safe_to_string"
+          str <- duk_safe_to_string ctx (negate 1)
+          Just . (fromIntegral rc, ) <$> peekCString str
+        else do
+          putStrLn "nothing"
+          return Nothing
 
 eval_ :: ScriptContext -> String -> IO Bool
 eval_ sctx src = withDukContext sctx $ \ctx -> withCString src $ \csrc ->
@@ -913,7 +930,6 @@ eval_ sctx src = withDukContext sctx $ \ctx -> withCString src $ \csrc ->
 evalEither :: FromJSON a => ScriptContext -> String -> IO (Either (Int, String) a)
 evalEither scxt src = do
   putStrLn "# evalEither"
-  putStrLn "eval"
   merr <- eval scxt src
   case merr of
     Just err -> return (Left err)
