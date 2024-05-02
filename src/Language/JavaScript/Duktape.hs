@@ -257,8 +257,9 @@ getType sctx idx = do
   t <- withDukContext' sctx $ \ctx -> do
     putStrLn "duk_get_type"
     typ <- duk_get_type ctx (fromIntegral idx)
-    putStrLn "return"
-    return $ fromMaybe NoneT (dukToType typ)
+    let retType = fromMaybe NoneT (dukToType typ)
+    putStrLn ("return" <> show retType)
+    return retType
   putStrLn "getType complete"
   return t
 
@@ -450,6 +451,7 @@ pushValue cxt val = case val of
           setPropertyByIndex cxt ix (fromIntegral i)
     V.imapM_ f a
   Object o -> do
+    putStrLn "pushValue - Object"
     ix <- pushObject cxt
     let f (k, v) = do
           pushValue cxt v
