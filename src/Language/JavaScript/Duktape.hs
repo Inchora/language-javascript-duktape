@@ -17,7 +17,7 @@ module Language.JavaScript.Duktape
     ScriptContext
   , newContext
   , withDukContext
-  , destroyStackContext
+  , destroyScriptContext
     -- * Types of Stack Values
   , StackIndex
   , Type (..)
